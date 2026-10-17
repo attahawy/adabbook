@@ -283,9 +283,8 @@ function Reader({ book }) {
       theme === "night" ? "night" : "paper";
   }, [theme]);
   useEffect(() => {
-    document.title = `${readingTitle} — أدب الرجل`;
     setLastPage(pageId);
-  }, [pageId, readingTitle, setLastPage]);
+  }, [pageId, setLastPage]);
   useEffect(() => {
     const onPopState = () => {
       const requested = pageFromUrl();
