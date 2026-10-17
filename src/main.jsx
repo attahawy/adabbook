@@ -149,6 +149,7 @@ function PreferencesDialog({
       id="reader-preferences"
       className="preferences-dialog"
       aria-labelledby="preferences-title"
+      aria-describedby="preferences-help"
       onClose={onClose}
       onClick={(event) => {
         if (event.target === event.currentTarget) dialogRef.current.close();
@@ -216,6 +217,10 @@ function PreferencesDialog({
             </button>
           </div>
         </div>
+        <p id="preferences-help" className="preferences-help">
+          أثناء القراءة، استخدم السهم الأيمن في لوحة المفاتيح للانتقال إلى الصفحة
+          السابقة، والسهم الأيسر للانتقال إلى الصفحة التالية.
+        </p>
       </div>
     </dialog>
   );
