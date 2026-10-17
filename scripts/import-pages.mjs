@@ -1,269 +1,229 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { load } from "cheerio";
+import { validateBook } from "../src/lib/book.js";
 import { toLatinDigits } from "../src/lib/numbers.js";
+import { convertWikiPage, titleKey } from "./lib/wiki-markdown.mjs";
 
-const root = fileURLToPath(new URL("../", import.meta.url));
-const endpoint = "https://attahawy.com/books/wiki/lifebook/api.php";
-const source =
-  "https://attahawy.com/books/wiki/lifebook/index.php?title=خاص:كل_الصفحات";
-const dataDirectory = `${root}data`;
-const pageDirectory = `${dataDirectory}/pages`;
-const refresh = process.argv.includes("--refresh");
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+export async function importPages({
+  directory = fileURLToPath(new URL("../", import.meta.url)),
+  sourceUrl = "https://attahawy.com/books/wiki/lifebook/index.php?title=خاص:كل_الصفحات",
+  refresh = false,
+} = {}) {
+  const root = `${directory.replace(/\/$/, "")}/`;
+  const dataDirectory = `${root}data`;
+  const cacheDirectory = `${root}.cache/import-pages`;
+  const target = `${dataDirectory}/book.json`;
+  const endpoint = new URL("api.php", sourceUrl).href;
+  const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function fetchJson(parameters) {
-  const url = `${endpoint}?${new URLSearchParams({ format: "json", formatversion: "2", maxlag: "5", ...parameters })}`;
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(45000),
-        headers: { "User-Agent": "AdabBookLocalReader/1.0" },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const result = await response.json();
-      if (result.error)
-        throw new Error(`${result.error.code}: ${result.error.info}`);
-      return result;
-    } catch (error) {
-      if (attempt === 3) throw error;
-      await delay(1000 * 2 ** attempt);
-    }
-  }
-}
-
-async function writeJson(path, data) {
-  const json = toLatinDigits(`${JSON.stringify(data, null, 2)}\n`);
-  await writeFile(`${path}.tmp`, json, "utf8");
-  await rename(`${path}.tmp`, path);
-  return JSON.parse(json);
-}
-
-await mkdir(pageDirectory, { recursive: true });
-const allPages = [];
-let continuation = {};
-do {
-  const result = await fetchJson({
-    action: "query",
-    list: "allpages",
-    apnamespace: "0",
-    aplimit: "max",
-    apfilterredir: "all",
-    ...continuation,
-  });
-  allPages.push(...result.query.allpages);
-  continuation = result.continue;
-} while (continuation);
-if (!allPages.length) throw new Error("The API returned no pages.");
-if (new Set(allPages.map((page) => page.pageid)).size !== allPages.length)
-  throw new Error("Duplicate page IDs.");
-
-// Check the same main-namespace list displayed in the requested browser tab.
-const listResponse = await fetch(source);
-if (!listResponse.ok)
-  throw new Error(`All-pages screen returned ${listResponse.status}`);
-const listing = load(await listResponse.text());
-const visibleTitles = listing(".mw-allpages-body a")
-  .map((_, link) => listing(link).text().trim())
-  .get();
-const apiTitles = new Set(allPages.map((page) => page.title));
-const unmatchedTitles = visibleTitles.filter((title) => !apiTitles.has(title));
-if (unmatchedTitles.length)
-  throw new Error(`Page-list mismatch: ${unmatchedTitles.join(", ")}`);
-const titleKey = (title) =>
-  toLatinDigits(title).replace(/_/g, " ").normalize("NFC");
-const idsByTitle = new Map(
-  allPages.map((page) => [titleKey(page.title), page.pageid]),
-);
-
-const site = await fetchJson({
-  action: "query",
-  meta: "siteinfo",
-  siprop: "general|rightsinfo",
-});
-const metadata = new Map();
-for (let offset = 0; offset < allPages.length; offset += 50) {
-  const result = await fetchJson({
-    action: "query",
-    pageids: allPages
-      .slice(offset, offset + 50)
-      .map((page) => page.pageid)
-      .join("|"),
-    prop: "info|revisions",
-    inprop: "url",
-    rvprop: "ids|timestamp",
-  });
-  for (const page of result.query.pages) metadata.set(page.pageid, page);
-}
-
-console.log(
-  `Found ${allPages.length} pages; ${visibleTitles.length} verified on the all-pages screen.`,
-);
-const pages = new Array(allPages.length);
-const searchPages = new Array(allPages.length);
-let cursor = 0;
-let completed = 0;
-const failures = [];
-async function worker() {
-  while (cursor < allPages.length) {
-    const index = cursor++;
-    const entry = allPages[index];
-    try {
-      const info = metadata.get(entry.pageid);
-      if (!info || info.missing) throw new Error("Page metadata is missing.");
-      let page;
-      const path = `${pageDirectory}/${entry.pageid}.json`;
-      if (!refresh) {
-        try {
-          const saved = await readFile(path, "utf8");
-          const normalized = toLatinDigits(saved);
-          const cached = JSON.parse(normalized);
-          if (
-            cached.schemaVersion === 1 &&
-            cached.revisionId === info.lastrevid &&
-            cached.title === toLatinDigits(entry.title) &&
-            cached.html &&
-            cached.wikitext !== undefined
-          ) {
-            page = cached;
-            if (normalized !== saved) await writeJson(path, cached);
-          }
-        } catch {
-          /* Fetch missing or outdated snapshots. */
-        }
-      }
-      if (!page) {
-        const result = await fetchJson({
-          action: "parse",
-          oldid: String(info.lastrevid),
-          prop: "text|wikitext|sections|links|images|categories|revid|displaytitle",
-          disableeditsection: "1",
-          disabletoc: "1",
+  async function fetchJson(parameters) {
+    const url = `${endpoint}?${new URLSearchParams({ format: "json", formatversion: "2", maxlag: "5", ...parameters })}`;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const response = await fetch(url, {
+          signal: AbortSignal.timeout(45000),
+          headers: { "User-Agent": "AdabBookReader/2.0" },
         });
-        const parsed = result.parse;
-        if (
-          parsed.pageid !== entry.pageid ||
-          parsed.revid !== info.lastrevid ||
-          !parsed.text
-        )
-          throw new Error("Unexpected parser result.");
-        const document = load(parsed.text);
-        document("script, style, .mw-editsection, .toc").remove();
-        const text = document.root().text().replace(/\s+/g, " ").trim();
-        page = {
-          schemaVersion: 1,
-          pageid: entry.pageid,
-          namespace: entry.ns,
-          title: entry.title,
-          displayTitle: parsed.displaytitle,
-          revisionId: parsed.revid,
-          revisedAt: info.revisions?.[0]?.timestamp ?? null,
-          fetchedAt: new Date().toISOString(),
-          sourceUrl: info.fullurl,
-          isRedirect: Boolean(info.redirect),
-          html: parsed.text,
-          text,
-          wikitext: parsed.wikitext,
-          sections: parsed.sections,
-          categories: parsed.categories,
-          links: parsed.links,
-          images: parsed.images,
-        };
-        page = await writeJson(path, page);
-        await delay(200);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const result = await response.json();
+        if (result.error)
+          throw new Error(`${result.error.code}: ${result.error.info}`);
+        return result;
+      } catch (error) {
+        if (attempt === 3) throw error;
+        await delay(1000 * 2 ** attempt);
       }
-      const wordCount = page.text.split(/\s+/).filter(Boolean).length;
-      const parsedDocument = load(page.html);
-      const readingTitle =
-        parsedDocument("h1,h2,h3,h4,h5,h6")
-          .first()
-          .text()
-          .replace(/\s+/g, " ")
-          .trim() || page.title;
-      const nextLink = parsedDocument("a")
-        .toArray()
-        .find(
-          (link) => parsedDocument(link).text().trim().toLowerCase() === "next",
-        );
-      const nextTitle = nextLink
-        ? new URL(
-            parsedDocument(nextLink).attr("href"),
-            page.sourceUrl,
-          ).searchParams.get("title")
-        : null;
-      pages[index] = {
-        pageid: page.pageid,
-        title: page.title,
-        readingTitle,
-        file: `pages/${page.pageid}.json`,
-        revisionId: page.revisionId,
-        wordCount,
-        readingMinutes: Math.max(1, Math.ceil(wordCount / 180)),
-        sourceNextPageId: nextTitle
-          ? (idsByTitle.get(titleKey(nextTitle)) ?? null)
-          : null,
-      };
-      searchPages[index] = { pageid: page.pageid, text: page.text };
-      completed++;
-      if (completed % 25 === 0 || completed === allPages.length)
-        console.log(`Parsed ${completed}/${allPages.length}`);
-    } catch (error) {
-      failures.push({
-        pageid: entry.pageid,
-        title: entry.title,
-        error: error.message,
-      });
-      console.error(`Failed page ${entry.pageid}: ${error.message}`);
     }
   }
-}
-await Promise.all(Array.from({ length: 3 }, worker));
-if (failures.length) {
-  await writeJson(`${dataDirectory}/import-errors.json`, failures);
-  throw new Error(
-    `${failures.length} pages failed; the previous manifest was preserved. Rerun to resume.`,
+
+  async function writeJson(path, data) {
+    await writeFile(
+      `${path}.tmp`,
+      `${JSON.stringify(data, null, 2)}\n`,
+      "utf8",
+    );
+    await rename(`${path}.tmp`, path);
+  }
+
+  await mkdir(dataDirectory, { recursive: true });
+  await mkdir(cacheDirectory, { recursive: true });
+  let savedPages = new Map();
+  try {
+    const saved = validateBook(JSON.parse(await readFile(target, "utf8")));
+    savedPages = new Map(saved.pages.map((page) => [page.pageid, page]));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+
+  const allPages = [];
+  let continuation = {};
+  do {
+    const result = await fetchJson({
+      action: "query",
+      list: "allpages",
+      apnamespace: "0",
+      aplimit: "max",
+      apfilterredir: "all",
+      ...continuation,
+    });
+    allPages.push(...result.query.allpages);
+    continuation = result.continue;
+  } while (continuation);
+  if (!allPages.length) throw new Error("The API returned no pages.");
+  if (new Set(allPages.map((page) => page.pageid)).size !== allPages.length)
+    throw new Error("Duplicate page IDs.");
+
+  const listResponse = await fetch(sourceUrl, {
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!listResponse.ok)
+    throw new Error(`All-pages screen returned ${listResponse.status}`);
+  const listing = load(await listResponse.text());
+  const visibleTitles = listing(".mw-allpages-body a")
+    .map((_, link) => listing(link).text().trim())
+    .get();
+  const apiTitles = new Set(allPages.map((page) => titleKey(page.title)));
+  const unmatched = visibleTitles.filter(
+    (title) => !apiTitles.has(titleKey(title)),
   );
+  if (!visibleTitles.length || unmatched.length)
+    throw new Error(`Page-list mismatch: ${unmatched.join(", ")}`);
+  const idsByTitle = new Map(
+    allPages.map((page) => [titleKey(page.title), page.pageid]),
+  );
+
+  const metadata = new Map();
+  for (let offset = 0; offset < allPages.length; offset += 50) {
+    const result = await fetchJson({
+      action: "query",
+      pageids: allPages
+        .slice(offset, offset + 50)
+        .map((page) => page.pageid)
+        .join("|"),
+      prop: "info",
+      inprop: "url",
+    });
+    for (const page of result.query.pages) metadata.set(page.pageid, page);
+  }
+
+  console.log(
+    `Found ${allPages.length} pages; ${visibleTitles.length} verified on the all-pages screen.`,
+  );
+  const pages = new Array(allPages.length);
+  const nextIds = new Map();
+  let cursor = 0;
+  let completed = 0;
+  const failures = [];
+  async function worker() {
+    while (cursor < allPages.length) {
+      const index = cursor++;
+      const entry = allPages[index];
+      try {
+        const info = metadata.get(entry.pageid);
+        if (!info || info.missing) throw new Error("Page metadata is missing.");
+        const path = `${cacheDirectory}/${entry.pageid}.json`;
+        let converted;
+        if (!refresh) {
+          try {
+            const cached = JSON.parse(await readFile(path, "utf8"));
+            if (
+              cached.page?.pageid === entry.pageid &&
+              cached.page.revisionId === info.lastrevid &&
+              cached.page.title === toLatinDigits(entry.title) &&
+              typeof cached.page.markdown === "string" &&
+              (cached.nextTitle === null ||
+                typeof cached.nextTitle === "string")
+            )
+              converted = cached;
+          } catch {
+            /* Fetch missing or outdated import checkpoints. */
+          }
+        }
+        if (!converted) {
+          const { parse: parsed } = await fetchJson({
+            action: "parse",
+            oldid: String(info.lastrevid),
+            prop: "text|revid",
+            disableeditsection: "1",
+            disabletoc: "1",
+          });
+          if (
+            parsed.pageid !== entry.pageid ||
+            parsed.revid !== info.lastrevid ||
+            !parsed.text
+          )
+            throw new Error("Unexpected parser result.");
+          converted = convertWikiPage(
+            {
+              pageid: entry.pageid,
+              title: entry.title,
+              revisionId: parsed.revid,
+              sourceUrl: info.fullurl,
+              html: parsed.text,
+            },
+            idsByTitle,
+          );
+          await writeJson(path, converted);
+          await delay(200);
+        }
+        const saved = savedPages.get(entry.pageid);
+        // Preserve local Markdown edits when the upstream revision is unchanged.
+        pages[index] =
+          !refresh &&
+          saved?.revisionId === info.lastrevid &&
+          saved.title === toLatinDigits(entry.title)
+            ? saved
+            : converted.page;
+        nextIds.set(
+          entry.pageid,
+          idsByTitle.get(titleKey(converted.nextTitle ?? "")),
+        );
+        completed++;
+        if (completed % 25 === 0 || completed === allPages.length)
+          console.log(`Converted ${completed}/${allPages.length}`);
+      } catch (error) {
+        failures.push({
+          pageid: entry.pageid,
+          title: entry.title,
+          error: error.message,
+        });
+        console.error(`Failed page ${entry.pageid}: ${error.message}`);
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: 3 }, worker));
+  if (failures.length) {
+    await writeJson(`${cacheDirectory}/errors.json`, failures);
+    throw new Error(
+      `${failures.length} pages failed; book.json was preserved. Rerun to resume.`,
+    );
+  }
+
+  const byId = new Map(pages.map((page) => [page.pageid, page]));
+  const orderedPages = [];
+  const seen = new Set();
+  let current = pages.find((page) => page.title === "مقدمة لا بد منها");
+  while (current && !seen.has(current.pageid)) {
+    seen.add(current.pageid);
+    orderedPages.push(current);
+    current = byId.get(nextIds.get(current.pageid));
+  }
+  for (const page of pages) if (!seen.has(page.pageid)) orderedPages.push(page);
+  const book = validateBook({
+    schemaVersion: 2,
+    sourceUrl: toLatinDigits(sourceUrl),
+    fetchedAt: new Date().toISOString(),
+    pages: orderedPages,
+  });
+  await writeJson(target, book);
+  await rm(`${cacheDirectory}/errors.json`, { force: true });
+  console.log(`Saved ${pages.length} Markdown pages in data/book.json.`);
 }
 
-// Follow the source's partial "next" chain, then append every remaining page
-// in the all-pages index's order. Guard against cycles and missing targets.
-const introduction = pages.find((page) => page.title === "مقدمة لا بد منها");
-const byId = new Map(pages.map((page) => [page.pageid, page]));
-const readingOrder = [];
-const seen = new Set();
-let current = introduction;
-while (current && !seen.has(current.pageid)) {
-  seen.add(current.pageid);
-  readingOrder.push(current.pageid);
-  current = byId.get(current.sourceNextPageId);
-}
-const sourceSequencePages = readingOrder.length;
-for (const page of pages)
-  if (!seen.has(page.pageid)) readingOrder.push(page.pageid);
-await writeJson(`${dataDirectory}/search-index.json`, {
-  schemaVersion: 1,
-  pages: searchPages,
-});
-await writeJson(`${dataDirectory}/manifest.json`, {
-  schemaVersion: 1,
-  title: site.query.general.sitename,
-  language: "ar",
-  direction: "rtl",
-  sourceUrl: source,
-  apiUrl: endpoint,
-  fetchedAt: new Date().toISOString(),
-  rights: site.query.rightsinfo,
-  totalPages: pages.length,
-  visibleIndexPages: visibleTitles.length,
-  namespace: 0,
-  order:
-    "Follow the source next-page sequence from the introduction, then append remaining pages alphabetically.",
-  sourceSequencePages,
-  readingOrder,
-  searchIndex: "search-index.json",
-  pages: pages.map(({ sourceNextPageId, ...page }) => page),
-});
-await rm(`${dataDirectory}/import-errors.json`, { force: true });
-console.log(
-  `Saved ${pages.length} parser snapshots, data/manifest.json, and data/search-index.json.`,
-);
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  await importPages({ refresh: process.argv.includes("--refresh") });

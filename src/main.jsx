@@ -7,6 +7,8 @@ import React, {
 } from "react";
 import { createRoot } from "react-dom/client";
 import DOMPurify from "dompurify";
+import { prepareBook } from "./lib/book.js";
+import { renderMarkdown } from "./lib/markdown.js";
 import {
   findMatchRanges,
   normalize,
@@ -28,9 +30,7 @@ function HighlightedText({ text, terms }) {
   let cursor = 0;
   for (const [start, end] of ranges) {
     parts.push(text.slice(cursor, start));
-    parts.push(
-      <mark key={`${start}-${end}`}>{text.slice(start, end)}</mark>,
-    );
+    parts.push(<mark key={`${start}-${end}`}>{text.slice(start, end)}</mark>);
     cursor = end;
   }
   parts.push(text.slice(cursor));
@@ -221,29 +221,20 @@ function PreferencesDialog({
   );
 }
 
-function Reader({ manifest }) {
-  const orderedPages = useMemo(
-    () =>
-      manifest.readingOrder.map((id) =>
-        manifest.pages.find((page) => page.pageid === id),
-      ),
-    [manifest],
-  );
+function Reader({ book }) {
+  const orderedPages = book.pages;
+  const totalPages = orderedPages.length;
+  const firstPageId = orderedPages[0].pageid;
   const pagesById = useMemo(
-    () => new Map(manifest.pages.map((page) => [page.pageid, page])),
-    [manifest],
+    () => new Map(orderedPages.map((page) => [page.pageid, page])),
+    [orderedPages],
   );
   const pagesByTitle = useMemo(
     () =>
-      new Map(
-        manifest.pages.map((page) => [normalize(page.title), page.pageid]),
-      ),
-    [manifest],
+      new Map(orderedPages.map((page) => [normalize(page.title), page.pageid])),
+    [orderedPages],
   );
-  const [lastPage, setLastPage] = useStored(
-    "last-page",
-    manifest.readingOrder[0],
-  );
+  const [lastPage, setLastPage] = useStored("last-page", firstPageId);
   const pageFromUrl = () =>
     Number(new URLSearchParams(location.search).get("page"));
   const [pageId, setPageId] = useState(() =>
@@ -251,80 +242,36 @@ function Reader({ manifest }) {
       ? pageFromUrl()
       : pagesById.has(lastPage)
         ? lastPage
-        : manifest.readingOrder[0],
+        : firstPageId,
   );
   const [bookmarks, setBookmarks] = useStored("bookmarks", []);
   const [finished, setFinished] = useStored("finished", []);
   const [fontSize, setFontSize] = useStored("font-size", 25);
   const [theme, setTheme] = useStored("theme", "paper");
   const [query, setQuery] = useState("");
-  const [searchIndex, setSearchIndex] = useState(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchError, setSearchError] = useState(false);
-  const [searchAttempt, setSearchAttempt] = useState(0);
+  const searchIndex = useMemo(
+    () =>
+      new Map(
+        orderedPages.map((page) => [
+          page.pageid,
+          { text: page.text, normalized: normalize(page.text) },
+        ]),
+      ),
+    [orderedPages],
+  );
   const hasQuery = query.trim().length > 0;
   const [filter, setFilter] = useState("all");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const [page, setPage] = useState(null);
-  const [pageError, setPageError] = useState(false);
-  const [retry, setRetry] = useState(0);
   const [progress, setProgress] = useState(0);
   const articleRef = useRef(null);
   const sidebarRef = useRef(null);
   const menuButtonRef = useRef(null);
-  const cache = useRef(new Map());
-  const active = pagesById.get(pageId);
-  const readingTitle = active.readingTitle ?? active.title;
+  const page = pagesById.get(pageId);
+  const readingTitle = page.readingTitle;
   const index = orderedPages.findIndex((item) => item.pageid === pageId);
   const isBookmarked = bookmarks.includes(pageId);
   const isFinished = finished.includes(pageId);
-
-  useEffect(() => {
-    if (!hasQuery || searchIndex) {
-      setSearchLoading(false);
-      return;
-    }
-    let cancelled = false;
-    const controller = new AbortController();
-    setSearchLoading(true);
-    setSearchError(false);
-    fetch(dataUrl(manifest.searchIndex), { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Search index unavailable");
-        return response.json();
-      })
-      .then((data) => {
-        if (
-          !Array.isArray(data.pages) ||
-          data.pages.length !== pagesById.size ||
-          data.pages.some(
-            (entry) =>
-              !pagesById.has(entry.pageid) || typeof entry.text !== "string",
-          )
-        )
-          throw new Error("Invalid search index");
-        const index = new Map(
-          data.pages.map((entry) => [
-            entry.pageid,
-            { text: entry.text, normalized: normalize(entry.text) },
-          ]),
-        );
-        if (index.size !== pagesById.size)
-          throw new Error("Incomplete search index");
-        if (!cancelled) setSearchIndex(index);
-      })
-      .catch((error) => {
-        if (!cancelled && error.name !== "AbortError") setSearchError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setSearchLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [hasQuery, searchIndex, searchAttempt, manifest.searchIndex, pagesById]);
 
   useEffect(() => {
     document.documentElement.dataset.theme =
@@ -338,46 +285,15 @@ function Reader({ manifest }) {
     const onPopState = () => {
       const requested = pageFromUrl();
       if (pagesById.has(requested)) setPageId(requested);
-      else setPageId(manifest.readingOrder[0]);
+      else setPageId(firstPageId);
     };
     window.addEventListener("popstate", onPopState);
     if (!pageFromUrl())
       history.replaceState(null, "", `?page=${pageId}${location.hash}`);
     return () => window.removeEventListener("popstate", onPopState);
-  }, [pagesById, manifest, pageId]);
+  }, [pagesById, firstPageId, pageId]);
 
   useEffect(() => {
-    let cancelled = false;
-    const controller = new AbortController();
-    setPage(null);
-    setPageError(false);
-    const loadPage = async () => {
-      try {
-        let next = cache.current.get(pageId);
-        if (!next) {
-          const response = await fetch(dataUrl(active.file), {
-            signal: controller.signal,
-          });
-          if (!response.ok) throw new Error("Page unavailable");
-          next = await response.json();
-          if (next.pageid !== pageId || typeof next.html !== "string")
-            throw new Error("Invalid page");
-          cache.current.set(pageId, next);
-        }
-        if (!cancelled) setPage(next);
-      } catch (error) {
-        if (!cancelled && error.name !== "AbortError") setPageError(true);
-      }
-    };
-    loadPage();
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [pageId, active.file, retry]);
-
-  useEffect(() => {
-    if (!page) return;
     const frame = requestAnimationFrame(() => {
       let anchor;
       try {
@@ -540,22 +456,20 @@ function Reader({ manifest }) {
   const terms = useMemo(() => searchTerms(query), [query]);
   const filteredPages = useMemo(
     () =>
-      hasQuery && !searchIndex
-        ? []
-        : orderedPages.filter((item) => {
-            if (filter === "saved" && !bookmarks.includes(item.pageid))
-              return false;
-            if (!terms.length) return true;
-            const haystack = `${normalize(`${item.readingTitle ?? item.title} ${item.title}`)} ${searchIndex.get(item.pageid).normalized}`;
-            return terms.every((term) => haystack.includes(term));
-          }),
-    [hasQuery, searchIndex, orderedPages, filter, bookmarks, terms],
+      orderedPages.filter((item) => {
+        if (filter === "saved" && !bookmarks.includes(item.pageid))
+          return false;
+        if (!terms.length) return true;
+        const haystack = `${normalize(`${item.readingTitle} ${item.title}`)} ${searchIndex.get(item.pageid).normalized}`;
+        return terms.every((term) => haystack.includes(term));
+      }),
+    [searchIndex, orderedPages, filter, bookmarks, terms],
   );
   const excerpts = useMemo(() => {
-    if (!hasQuery || !searchIndex) return new Map();
+    if (!hasQuery) return new Map();
     return new Map(
       filteredPages.map((item) => {
-        const title = normalize(item.readingTitle ?? item.title);
+        const title = normalize(item.readingTitle);
         const bodyTerms = terms.filter((term) => !title.includes(term));
         return [
           item.pageid,
@@ -568,17 +482,13 @@ function Reader({ manifest }) {
   }, [hasQuery, searchIndex, filteredPages, terms]);
 
   const html = useMemo(() => {
-    if (!page) return "";
     const doc = new DOMParser().parseFromString(
-      DOMPurify.sanitize(page.html, {
-        FORBID_TAGS: ["style", "form", "input", "button", "iframe"],
+      DOMPurify.sanitize(renderMarkdown(page.markdown), {
+        FORBID_TAGS: ["style", "form", "button", "iframe"],
         FORBID_ATTR: ["style"],
       }),
       "text/html",
     );
-    doc
-      .querySelectorAll(".mw-editsection, .toc, .mw-empty-elt")
-      .forEach((element) => element.remove());
     const firstHeading = doc.querySelector("h1,h2,h3,h4,h5,h6");
     if (firstHeading?.textContent.trim()) {
       // Promote the first content heading to the page header, retaining its
@@ -598,25 +508,14 @@ function Reader({ manifest }) {
       const url = new URL(href, page.sourceUrl);
       const source = new URL(page.sourceUrl);
       const title = url.searchParams.get("title");
-      const id =
-        url.origin === source.origin &&
-        url.pathname === source.pathname &&
-        title
+      const id = href.startsWith("?page=")
+        ? Number(url.searchParams.get("page"))
+        : url.origin === source.origin &&
+            url.pathname === source.pathname &&
+            title
           ? pagesByTitle.get(normalize(title))
           : undefined;
-      if (
-        id &&
-        ["next", "pre", "prev", "previous"].includes(
-          link.textContent.trim().toLowerCase(),
-        )
-      ) {
-        const parent = link.parentElement;
-        link.remove();
-        if (parent?.tagName === "P" && !parent.textContent.trim())
-          parent.remove();
-        return;
-      }
-      if (id) {
+      if (pagesById.has(id)) {
         link.href = `?page=${id}${url.hash}`;
         link.dataset.pageId = String(id);
       } else {
@@ -637,7 +536,7 @@ function Reader({ manifest }) {
       }
     });
     return doc.body.innerHTML;
-  }, [page, pagesByTitle]);
+  }, [page, pagesById, pagesByTitle]);
 
   return (
     <>
@@ -647,10 +546,10 @@ function Reader({ manifest }) {
       <header className="site-header">
         <a
           className="brand"
-          href={`?page=${manifest.readingOrder[0]}`}
+          href={`?page=${firstPageId}`}
           onClick={(event) => {
             event.preventDefault();
-            navigate(manifest.readingOrder[0]);
+            navigate(firstPageId);
           }}
           aria-label="أدب الرجل، بداية الكتاب"
         >
@@ -710,7 +609,7 @@ function Reader({ manifest }) {
         <div className="sidebar-top">
           <div className="sidebar-heading">
             <h2>فهرس الكتاب</h2>
-            <span>{number(manifest.totalPages)} صفحة</span>
+            <span>{number(totalPages)} صفحة</span>
             <button
               className="close-contents icon-button"
               aria-label="إغلاق الفهرس"
@@ -751,20 +650,10 @@ function Reader({ manifest }) {
           </div>
         </div>
         <nav className="contents-list" aria-label="صفحات الكتاب">
-          {hasQuery && !searchError && (
+          {hasQuery && (
             <p className="search-summary" role="status">
-              {searchLoading || !searchIndex
-                ? "جارٍ البحث…"
-                : `${number(filteredPages.length)} نتيجة في العناوين والنصوص`}
+              {`${number(filteredPages.length)} نتيجة في العناوين والنصوص`}
             </p>
-          )}
-          {hasQuery && searchError && (
-            <div className="list-empty" role="alert">
-              <p>تعذّر تحميل البحث. حاول مرة أخرى.</p>
-              <button onClick={() => setSearchAttempt((value) => value + 1)}>
-                إعادة المحاولة
-              </button>
-            </div>
           )}
           {filteredPages.map((item) => (
             <button
@@ -778,10 +667,7 @@ function Reader({ manifest }) {
               </span>
               <span className="chapter-copy">
                 <span className="chapter-name">
-                  <HighlightedText
-                    text={item.readingTitle ?? item.title}
-                    terms={terms}
-                  />
+                  <HighlightedText text={item.readingTitle} terms={terms} />
                 </span>
                 {excerpts.get(item.pageid) && (
                   <span className="search-excerpt">
@@ -799,7 +685,7 @@ function Reader({ manifest }) {
               ) : null}
             </button>
           ))}
-          {!filteredPages.length && (!hasQuery || searchIndex) && (
+          {!filteredPages.length && (
             <div className="list-empty">
               <Icon
                 name={filter === "saved" ? "bookmark" : "search"}
@@ -821,13 +707,13 @@ function Reader({ manifest }) {
             <span>رحلتك في الكتاب</span>
             <strong>
               {number(finished.filter((id) => pagesById.has(id)).length)} /{" "}
-              {number(manifest.totalPages)}
+              {number(totalPages)}
             </strong>
           </div>
           <div className="status-track">
             <span
               style={{
-                width: `${(finished.length / manifest.totalPages) * 100}%`,
+                width: `${(finished.length / totalPages) * 100}%`,
               }}
             />
           </div>
@@ -839,14 +725,13 @@ function Reader({ manifest }) {
         <div className="book-page" key={pageId}>
           <div className="chapter-heading">
             <p className="chapter-kicker">
-              الصفحة {number(index + 1)}{" "}
-              <span>من {number(manifest.totalPages)}</span>
+              الصفحة {number(index + 1)} <span>من {number(totalPages)}</span>
             </p>
             <h1>{readingTitle}</h1>
             <div className="chapter-meta">
-              <span>{number(active.readingMinutes)} دقائق قراءة</span>
+              <span>{number(page.readingMinutes)} دقائق قراءة</span>
               <span className="meta-dot">·</span>
-              <span>{number(active.wordCount)} كلمة</span>
+              <span>{number(page.wordCount)} كلمة</span>
             </div>
           </div>
           <div className="title-ornament">
@@ -854,90 +739,70 @@ function Reader({ manifest }) {
             <i>❧</i>
             <span />
           </div>
-          {pageError ? (
-            <ErrorMessage retry={() => setRetry((value) => value + 1)}>
-              تعذّر تحميل هذه الصفحة. حاول فتحها مرة أخرى.
-            </ErrorMessage>
-          ) : !page ? (
-            <div className="page-loading" role="status">
-              جارٍ فتح الصفحة…
-            </div>
-          ) : (
-            <article
-              ref={articleRef}
-              className="book-content"
-              style={{
-                "--reading-size": `${Math.min(35, Math.max(20, Number(fontSize) || 25))}px`,
-              }}
-              onClick={(event) => {
-                const link = event.target.closest("a[data-page-id]");
-                if (
-                  link &&
-                  event.button === 0 &&
-                  !event.metaKey &&
-                  !event.ctrlKey &&
-                  !event.shiftKey &&
-                  !event.altKey
-                ) {
-                  event.preventDefault();
-                  navigate(
-                    Number(link.dataset.pageId),
-                    new URL(link.href).hash,
-                  );
-                }
-              }}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
-          )}
-          {page && (
-            <footer className="chapter-footer">
-              <span className="end-mark">◆</span>
+          <article
+            ref={articleRef}
+            className="book-content"
+            style={{
+              "--reading-size": `${Math.min(35, Math.max(20, Number(fontSize) || 25))}px`,
+            }}
+            onClick={(event) => {
+              const link = event.target.closest("a[data-page-id]");
+              if (
+                link &&
+                event.button === 0 &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.shiftKey &&
+                !event.altKey
+              ) {
+                event.preventDefault();
+                navigate(Number(link.dataset.pageId), new URL(link.href).hash);
+              }
+            }}
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+          <footer className="chapter-footer">
+            <span className="end-mark">◆</span>
+            <button
+              className={`finished-button ${isFinished ? "is-finished" : ""}`}
+              aria-pressed={isFinished}
+              onClick={toggleFinished}
+            >
+              <Icon name="check" size={17} />
+              {isFinished ? "تمّت قراءة هذه الصفحة" : "أتممتُ قراءة هذه الصفحة"}
+            </button>
+            <nav className="page-navigation" aria-label="التنقل بين الصفحات">
               <button
-                className={`finished-button ${isFinished ? "is-finished" : ""}`}
-                aria-pressed={isFinished}
-                onClick={toggleFinished}
+                disabled={index === 0}
+                aria-keyshortcuts="ArrowRight"
+                onClick={() => navigate(orderedPages[index - 1].pageid)}
               >
-                <Icon name="check" size={17} />
-                {isFinished
-                  ? "تمّت قراءة هذه الصفحة"
-                  : "أتممتُ قراءة هذه الصفحة"}
+                <Icon name="right" size={20} />
+                <span>
+                  <small>الصفحة السابقة</small>
+                  <strong>
+                    {index
+                      ? orderedPages[index - 1].readingTitle
+                      : "بداية الكتاب"}
+                  </strong>
+                </span>
               </button>
-              <nav className="page-navigation" aria-label="التنقل بين الصفحات">
-                <button
-                  disabled={index === 0}
-                  aria-keyshortcuts="ArrowRight"
-                  onClick={() => navigate(orderedPages[index - 1].pageid)}
-                >
-                  <Icon name="right" size={20} />
-                  <span>
-                    <small>الصفحة السابقة</small>
-                    <strong>
-                      {index
-                        ? (orderedPages[index - 1].readingTitle ??
-                          orderedPages[index - 1].title)
-                        : "بداية الكتاب"}
-                    </strong>
-                  </span>
-                </button>
-                <button
-                  className="next-page"
-                  aria-keyshortcuts="ArrowLeft"
-                  disabled={index === orderedPages.length - 1}
-                  onClick={() => navigate(orderedPages[index + 1].pageid)}
-                >
-                  <span>
-                    <small>الصفحة التالية</small>
-                    <strong>
-                      {orderedPages[index + 1]?.readingTitle ??
-                        orderedPages[index + 1]?.title ??
-                        "نهاية الكتاب"}
-                    </strong>
-                  </span>
-                  <Icon name="left" size={20} />
-                </button>
-              </nav>
-            </footer>
-          )}
+              <button
+                className="next-page"
+                aria-keyshortcuts="ArrowLeft"
+                disabled={index === orderedPages.length - 1}
+                onClick={() => navigate(orderedPages[index + 1].pageid)}
+              >
+                <span>
+                  <small>الصفحة التالية</small>
+                  <strong>
+                    {orderedPages[index + 1]?.readingTitle ?? "نهاية الكتاب"}
+                  </strong>
+                </span>
+                <Icon name="left" size={20} />
+              </button>
+            </nav>
+          </footer>
         </div>
         <footer className="site-footer">
           <span>أدب الرجل</span>
@@ -961,25 +826,19 @@ function Reader({ manifest }) {
 }
 
 function App() {
-  const [manifest, setManifest] = useState(null);
+  const [book, setBook] = useState(null);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
     setError(false);
-    fetch(dataUrl("manifest.json"), { signal: controller.signal })
+    fetch(dataUrl("book.json"), { signal: controller.signal })
       .then((response) => {
-        if (!response.ok) throw new Error("Manifest unavailable");
+        if (!response.ok) throw new Error("Book unavailable");
         return response.json();
       })
       .then((data) => {
-        if (
-          !data.totalPages ||
-          !Array.isArray(data.pages) ||
-          !Array.isArray(data.readingOrder)
-        )
-          throw new Error("Invalid manifest");
-        setManifest(data);
+        setBook(prepareBook(data));
       })
       .catch((error) => {
         if (error.name !== "AbortError") setError(true);
@@ -989,10 +848,10 @@ function App() {
   if (error)
     return (
       <ErrorMessage retry={() => setAttempt((value) => value + 1)}>
-        تعذّر تحميل فهرس الكتاب. تحقق من اتصالك وحاول مجددًا.
+        تعذّر تحميل الكتاب. تحقق من اتصالك وحاول مجددًا.
       </ErrorMessage>
     );
-  if (!manifest)
+  if (!book)
     return (
       <div className="initial-loading" role="status">
         <Icon name="book" size={42} />
@@ -1000,7 +859,7 @@ function App() {
         <small>جارٍ فتح الكتاب…</small>
       </div>
     );
-  return <Reader manifest={manifest} />;
+  return <Reader book={book} />;
 }
 
 createRoot(document.getElementById("root")).render(<App />);

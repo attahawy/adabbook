@@ -526,7 +526,7 @@ button svg {
   font-weight: 700;
   scroll-margin-top: 110px;
 }
-.book-content > .mw-parser-output > p:first-of-type:first-letter {
+.book-content > p:first-of-type:first-letter {
   color: var(--green);
 }
 .book-content a {
@@ -552,8 +552,7 @@ button svg {
   max-width: 100%;
   height: auto;
 }
-.book-content figure,
-.book-content .thumb {
+.book-content figure {
   margin: 1em 0;
   max-width: 100%;
 }
@@ -580,8 +579,19 @@ button svg {
   font-size: 0.55em;
   line-height: 0;
 }
-.book-content .references {
+.book-content .footnotes {
   font-size: 0.8em;
+}
+.book-content .footnotes-sep {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2em 0 1em;
+}
+.book-content .task-list-item {
+  list-style: none;
+}
+.book-content .task-list-item-checkbox {
+  margin-inline-end: 0.5em;
 }
 .book-content [id] {
   scroll-margin-top: 115px;
@@ -706,13 +716,7 @@ button svg {
   padding: 10px 20px;
   border-radius: 3px;
 }
-.page-loading {
-  font-size: 13px;
-  text-align: center;
-  color: var(--muted);
-  padding: 80px 0;
-  min-height: 40vh;
-}
+
 .initial-loading {
   display: flex;
   flex-direction: column;
