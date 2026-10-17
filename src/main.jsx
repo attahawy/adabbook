@@ -810,7 +810,27 @@ function Reader({ book }) {
           </footer>
         </div>
         <footer className="site-footer">
-          <span>أدب الرجل</span>
+          <span>حمّل تطبيق أدب الرجل</span>
+          <nav className="app-downloads" aria-label="تحميل التطبيق">
+            <a
+              href="https://apps.apple.com/app/id6768483584"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="حمّل التطبيق من App Store"
+              dir="ltr"
+            >
+              App Store
+            </a>
+            <a
+              href="https://play.google.com/store/apps/details?id=com.rajol.adabbookapp"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="حمّل التطبيق من Google Play"
+              dir="ltr"
+            >
+              Google Play
+            </a>
+          </nav>
         </footer>
       </main>
       <PreferencesDialog
