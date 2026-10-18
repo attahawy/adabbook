@@ -4,12 +4,16 @@ import { fileURLToPath } from "node:url";
 import { load } from "cheerio";
 import { prepareBook } from "../src/lib/book.js";
 import { renderMarkdown } from "../src/lib/markdown.js";
+import { filterBookPages } from "./lib/book-pages.mjs";
 
 const root = fileURLToPath(new URL("../data/", import.meta.url));
 const raw = await readFile(`${root}book.json`, "utf8");
 assert.doesNotMatch(raw, /[٠-٩۰-۹]/, "Use 0–9 in the saved JSON");
 assert.deepEqual(await readdir(root), ["book.json"], "Keep one book data file");
 const book = prepareBook(JSON.parse(raw));
+const filtered = filterBookPages(book.pages);
+assert.deepEqual(filtered.blankTitles, [], "Remove blank or title-only pages");
+assert.deepEqual(filtered.excludedTitles, [], "Remove excluded pages");
 const ids = new Set(book.pages.map((page) => page.pageid));
 let words = 0;
 let links = 0;

@@ -251,6 +251,8 @@ function Reader({ book }) {
   );
   const [bookmarks, setBookmarks] = useStored("bookmarks", []);
   const [finished, setFinished] = useStored("finished", []);
+  const savedCount = bookmarks.filter((id) => pagesById.has(id)).length;
+  const finishedCount = finished.filter((id) => pagesById.has(id)).length;
   const [fontSize, setFontSize] = useStored("font-size", 25);
   const [theme, setTheme] = useStored("theme", "paper");
   const [query, setQuery] = useState("");
@@ -649,7 +651,7 @@ function Reader({ book }) {
               aria-pressed={filter === "saved"}
               onClick={() => setFilter("saved")}
             >
-              المحفوظة <span>{number(bookmarks.length)}</span>
+              المحفوظة <span>{number(savedCount)}</span>
             </button>
           </div>
         </div>
@@ -710,14 +712,13 @@ function Reader({ book }) {
           <div>
             <span>رحلتك في الكتاب</span>
             <strong>
-              {number(finished.filter((id) => pagesById.has(id)).length)} /{" "}
-              {number(totalPages)}
+              {number(finishedCount)} / {number(totalPages)}
             </strong>
           </div>
           <div className="status-track">
             <span
               style={{
-                width: `${(finished.length / totalPages) * 100}%`,
+                width: `${(finishedCount / totalPages) * 100}%`,
               }}
             />
           </div>

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { importPages } from "../scripts/import-pages.mjs";
 
-test("imports atomically, reuses revision checkpoints, and keeps unchanged local edits", async (context) => {
+test("imports atomically, skips blank and excluded pages, and preserves cached local edits", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "adabbook-import-"));
   context.after(() => rm(directory, { recursive: true, force: true }));
   const originalFetch = globalThis.fetch;
@@ -18,12 +18,23 @@ test("imports atomically, reuses revision checkpoints, and keeps unchanged local
   const entries = [
     { pageid: 11, ns: 0, title: "الثانية" },
     { pageid: 10, ns: 0, title: "مقدمة لا بد منها" },
+    { pageid: 12, ns: 0, title: "فارغة بعنوان" },
+    { pageid: 13, ns: 0, title: "عنوان فقط" },
+    { pageid: 14, ns: 0, title: "شتاوات" },
+    { pageid: 15, ns: 0, title: "موضوعات الكتاب" },
   ];
+  const nextTitles = new Map([
+    [10, "فارغة بعنوان"],
+    [12, "عنوان فقط"],
+    [13, "شتاوات"],
+    [14, "موضوعات الكتاب"],
+    [15, "الثانية"],
+  ]);
   globalThis.fetch = async (input) => {
     const url = new URL(input);
     if (url.pathname.endsWith("index.php"))
       return new Response(
-        '<div class="mw-allpages-body"><a>الثانية</a><a>مقدمة لا بد منها</a></div>',
+        `<div class="mw-allpages-body">${entries.map((page) => `<a>${page.title}</a>`).join("")}</div>`,
       );
     if (url.searchParams.get("list") === "allpages")
       return Response.json({ query: { allpages: entries } });
@@ -40,32 +51,47 @@ test("imports atomically, reuses revision checkpoints, and keeps unchanged local
     parseRequests++;
     assert.equal(url.searchParams.get("prop"), "text|revid");
     const pageid = Number(url.searchParams.get("oldid")) - 100;
+    const content =
+      pageid === 12
+        ? "<h2>فارغة بعنوان</h2>"
+        : pageid === 13
+          ? "<p>عنوان فقط</p>"
+          : `<h2>عنوان ${pageid}</h2><p>المحتوى الأصلي</p>`;
     return Response.json({
       parse: {
         pageid,
         revid: pageid + 100,
         text: fail
           ? ""
-          : `<h2>عنوان ${pageid}</h2><p>المحتوى الأصلي</p>${pageid === 10 ? '<p><a href="?title=الثانية">next</a></p>' : ""}`,
+          : `${content}${nextTitles.has(pageid) ? `<p><a href="?title=${nextTitles.get(pageid)}">next</a></p>` : ""}`,
       },
     });
   };
   const options = { directory, sourceUrl };
   const target = join(directory, "data/book.json");
   await importPages(options);
-  assert.equal(parseRequests, 2);
+  assert.equal(parseRequests, entries.length);
   const saved = JSON.parse(await readFile(target, "utf8"));
   assert.deepEqual(
     saved.pages.map((page) => page.pageid),
     [10, 11],
   );
+  assert.equal(
+    await readFile(join(directory, "tmp/blank-page-titles.txt"), "utf8"),
+    "فارغة بعنوان\nعنوان فقط\n",
+  );
   saved.pages[0].markdown = "## تعديل محلي\n\nنص محرر";
   await writeFile(target, JSON.stringify(saved));
 
   await importPages(options);
-  assert.equal(parseRequests, 2, "Unchanged revisions must reuse checkpoints");
+  assert.equal(
+    parseRequests,
+    entries.length,
+    "Unchanged revisions must reuse checkpoints",
+  );
   const updated = JSON.parse(await readFile(target, "utf8"));
   assert.equal(updated.pages[0].markdown, saved.pages[0].markdown);
+  assert.deepEqual(updated.pages.map((page) => page.pageid), [10, 11]);
 
   fail = true;
   const beforeFailure = await readFile(target, "utf8");
@@ -77,11 +103,12 @@ test("imports atomically, reuses revision checkpoints, and keeps unchanged local
   const errors = JSON.parse(
     await readFile(join(directory, ".cache/import-pages/errors.json"), "utf8"),
   );
-  assert.equal(errors.length, 2);
+  assert.equal(errors.length, entries.length);
 
   fail = false;
   await importPages({ ...options, refresh: true });
   const refreshed = JSON.parse(await readFile(target, "utf8"));
+  assert.deepEqual(refreshed.pages.map((page) => page.pageid), [10, 11]);
   assert.match(refreshed.pages[0].markdown, /المحتوى الأصلي/);
   assert.doesNotMatch(refreshed.pages[0].markdown, /تعديل محلي/);
   await assert.rejects(

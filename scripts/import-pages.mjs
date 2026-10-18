@@ -5,6 +5,7 @@ import { load } from "cheerio";
 import { validateBook } from "../src/lib/book.js";
 import { toLatinDigits } from "../src/lib/numbers.js";
 import { convertWikiPage, titleKey } from "./lib/wiki-markdown.mjs";
+import { filterBookPages } from "./lib/book-pages.mjs";
 
 export async function importPages({
   directory = fileURLToPath(new URL("../", import.meta.url)),
@@ -211,15 +212,24 @@ export async function importPages({
     current = byId.get(nextIds.get(current.pageid));
   }
   for (const page of pages) if (!seen.has(page.pageid)) orderedPages.push(page);
+  const filtered = filterBookPages(orderedPages);
   const book = validateBook({
     schemaVersion: 2,
     sourceUrl: toLatinDigits(sourceUrl),
     fetchedAt: new Date().toISOString(),
-    pages: orderedPages,
+    pages: filtered.pages,
   });
+  await mkdir(`${root}tmp`, { recursive: true });
+  await writeFile(
+    `${root}tmp/blank-page-titles.txt`,
+    filtered.blankTitles.map((title) => `${title}\n`).join(""),
+    "utf8",
+  );
   await writeJson(target, book);
   await rm(`${cacheDirectory}/errors.json`, { force: true });
-  console.log(`Saved ${pages.length} Markdown pages in data/book.json.`);
+  console.log(
+    `Saved ${book.pages.length} Markdown pages in data/book.json; omitted ${filtered.blankTitles.length} blank pages and ${filtered.excludedTitles.length} excluded pages. Blank titles are in tmp/blank-page-titles.txt.`,
+  );
 }
 
 if (
