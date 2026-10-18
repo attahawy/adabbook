@@ -149,11 +149,14 @@ export async function verifyPublishedBook(book, {
   throw new Error("The published book does not match this release; no notification was sent.");
 }
 
-export function githubStateStore({ repository, token, fetchImpl = fetch }) {
+export function githubStateStore({
+  repository, token, fetchImpl = fetch,
+  branch = "notification-state", validate = validateState,
+}) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository ?? "") || !token) {
     throw new Error("GITHUB_REPOSITORY and a repository-scoped GITHUB_TOKEN are required.");
   }
-  const branch = "notification-state";
+  if (!/^[a-z0-9-]+$/.test(branch)) throw new Error("Invalid history branch.");
   const path = "state.json";
   const base = `https://api.github.com/repos/${repository}`;
   let sha;
@@ -182,10 +185,10 @@ export function githubStateStore({ repository, token, fetchImpl = fetch }) {
       exists = true;
       const file = await api(`/contents/${path}?ref=${branch}`);
       sha = file.sha;
-      return validateState(JSON.parse(Buffer.from(file.content, "base64").toString("utf8")));
+      return validate(JSON.parse(Buffer.from(file.content, "base64").toString("utf8")));
     },
     async saveState(state) {
-      validateState(state);
+      validate(state);
       const content = `${JSON.stringify(state, null, 2)}\n`;
       if (!exists) {
         // An orphan branch keeps delivery history out of site builds/data.

@@ -1,5 +1,48 @@
 # New-page push notifications
 
+## Scheduled daily and Friday advice
+
+The app exposes independent new-page notifications plus an exclusive advice
+cadence: off, daily, or Friday. The public advice topics are
+`adabbook_daily_advice` and `adabbook_friday_advice`.
+
+`.github/workflows/advice-notifications.yml` runs `scripts/notify-advice.mjs`
+at **09:00 in `Africa/Cairo`** every day. The IANA timezone follows Cairo's
+seasonal clock changes. The sender checks Cairo's date/hour again, skips Friday
+advice on other weekdays, and sends daily advice on Fridays to the separate
+daily audience. The app unsubscribes the old cadence before subscribing to the
+new one. GitHub Actions can delay scheduled jobs, so 09:00 is the target time,
+not an exact delivery guarantee. See [GitHub schedule syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onschedule).
+
+This workflow reuses `FIREBASE_SERVICE_ACCOUNT_JSON` and the existing
+`NEW_PAGE_NOTIFICATIONS_ENABLED=true` repository variable. It does not require
+new sender credentials or app-side private keys. Publishing the workflow to the
+default branch and distributing the updated app are required to activate this
+feature. Local verification does not publish the schedule or send a broadcast.
+
+Each message rotates through a real advice page (excluding introductory material),
+contains a short Markdown-free excerpt, and passes its original `pageid` using
+`type: daily_advice` or `friday_advice`. The app validates a single page ID,
+shows the appropriate foreground banner, and opens that advice when tapped.
+Notifications expire after twelve hours to limit stale delayed reminders.
+
+Delivery state is isolated on the `advice-notification-state` orphan branch.
+The sender verifies the published book and durably saves each day's intent
+before contacting FCM. Accepted daily/Friday deliveries are each recorded once;
+reruns skip them. An uncertain result or failed post-send write leaves a
+`pending` entry and blocks same-day automatic resend. Review the workflow/FCM
+result before editing that entry: mark it `sent` if accepted, or clear that
+cadence to `null` only after confirming no delivery occurred and deliberately
+requesting a retry. A subsequent day's distinct advice proceeds normally and
+replaces the older entry. Do not delete/reset the state branch to retry.
+
+Preview without credentials or sending:
+
+```sh
+node scripts/notify-advice.mjs --dry-run
+node --test tests/advice-notifications.test.mjs
+```
+
 The native Adab Book app uses Firebase project `adabbook-rajol` and public topic
 `adabbook_new_pages`. The website remains a static GitHub Pages reader. Notification
 sending runs in the `notify` job after a successful Pages deployment.
