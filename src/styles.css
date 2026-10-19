@@ -1,5 +1,6 @@
 :root {
   --font-arabic: "The Year of Handicrafts", serif;
+  --font-body: "Vazirmatn", sans-serif;
   font-family: var(--font-arabic);
   color: #273b35;
   background: #f9f7f2;
@@ -152,6 +153,7 @@ button svg {
   display: none;
 }
 .sidebar {
+  font-family: var(--font-body);
   width: 310px;
   position: fixed;
   inset-inline-start: 0;
@@ -507,7 +509,7 @@ button svg {
   font-style: normal;
 }
 .book-content {
-  font-family: var(--font-arabic);
+  font-family: var(--font-body);
   font-size: var(--reading-size, 25px);
   font-weight: 400;
   line-height: 2.05;
@@ -524,6 +526,7 @@ button svg {
 .book-content h4,
 .book-content h5,
 .book-content h6 {
+  font-family: var(--font-arabic);
   color: var(--ink);
   line-height: 1.7;
   margin: 1.6em 0 0.65em;
@@ -580,7 +583,6 @@ button svg {
   padding: 16px;
 }
 .book-content sup {
-  font-family: var(--font-arabic);
   font-size: 0.55em;
   line-height: 0;
 }
