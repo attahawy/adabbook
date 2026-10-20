@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -274,6 +275,7 @@ function Reader({ book }) {
   const articleRef = useRef(null);
   const sidebarRef = useRef(null);
   const menuButtonRef = useRef(null);
+  const startAtTopRef = useRef(false);
   const page = pagesById.get(pageId);
   const readingTitle = page.readingTitle;
   const index = orderedPages.findIndex((item) => item.pageid === pageId);
@@ -289,6 +291,7 @@ function Reader({ book }) {
   }, [pageId, setLastPage]);
   useEffect(() => {
     const onPopState = () => {
+      startAtTopRef.current = false;
       const requested = pageFromUrl();
       if (pagesById.has(requested)) setPageId(requested);
       else setPageId(firstPageId);
@@ -299,8 +302,13 @@ function Reader({ book }) {
     return () => window.removeEventListener("popstate", onPopState);
   }, [pagesById, firstPageId, pageId]);
 
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+  useLayoutEffect(() => {
+    const startAtTop = startAtTopRef.current;
+    startAtTopRef.current = false;
+    const position = startAtTop
+      ? 0
+      : Number(readStored(`position:${pageId}`, 0)) || 0;
+    const restoreScroll = () => {
       let anchor;
       try {
         anchor = decodeURIComponent(location.hash.slice(1));
@@ -309,8 +317,11 @@ function Reader({ book }) {
       }
       if (anchor && document.getElementById(anchor))
         document.getElementById(anchor).scrollIntoView();
-      else window.scrollTo(0, Number(readStored(`position:${pageId}`, 0)) || 0);
-    });
+      else window.scrollTo(0, position);
+    };
+    // Direct navigation starts fresh; reloads and history resume reading.
+    if (startAtTop) restoreScroll();
+    const frame = requestAnimationFrame(restoreScroll);
     let timer;
     const onScroll = () => {
       const article = articleRef.current;
@@ -412,6 +423,7 @@ function Reader({ book }) {
         else window.scrollTo(0, 0);
       } else {
         history.pushState(null, "", `?page=${id}${anchor}`);
+        startAtTopRef.current = true;
         setPageId(id);
         setProgress(0);
       }
