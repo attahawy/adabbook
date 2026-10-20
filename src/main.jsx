@@ -793,29 +793,6 @@ function Reader({ book }) {
               <span className="meta-dot">·</span>
               <span>{number(page.wordCount)} كلمة</span>
             </div>
-            {page.tags.length > 0 && (
-              <div
-                className="chapter-tags"
-                role="group"
-                aria-label="موضوعات الوصية"
-              >
-                {page.tags.map((tag) => (
-                  <button
-                    key={tag}
-                    aria-label={`عرض وصايا عن ${tag}`}
-                    aria-pressed={selectedTag === tag}
-                    onClick={() => {
-                      setSelectedTag(tag);
-                      setQuery("");
-                      setFilter("all");
-                      setSidebarOpen(true);
-                    }}
-                  >
-                    {tag}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           <div className="title-ornament">
             <span />
@@ -844,6 +821,29 @@ function Reader({ book }) {
             }}
             dangerouslySetInnerHTML={{ __html: html }}
           />
+          {page.tags.length > 0 && (
+            <div
+              className="chapter-tags"
+              role="group"
+              aria-label="موضوعات الوصية"
+            >
+              {page.tags.map((tag) => (
+                <button
+                  key={tag}
+                  aria-label={`عرض وصايا عن ${tag}`}
+                  aria-pressed={selectedTag === tag}
+                  onClick={() => {
+                    setSelectedTag(tag);
+                    setQuery("");
+                    setFilter("all");
+                    setSidebarOpen(true);
+                  }}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
           <footer className="chapter-footer">
             <span className="end-mark">◆</span>
             <button
