@@ -19,7 +19,11 @@ let words = 0;
 let links = 0;
 let notes = 0;
 for (const page of book.pages) {
-  assert.ok(page.tags.length, `${page.title}: add topic tags before publishing`);
+  // The introduction stays in the reading order without an advice topic.
+  assert.ok(
+    page.tags.length || page.pageid === 2,
+    `${page.title}: add topic tags to advice before publishing`,
+  );
   const doc = load(renderMarkdown(page.markdown));
   assert.ok(page.text.trim(), `${page.title}: text is empty`);
   assert.doesNotMatch(

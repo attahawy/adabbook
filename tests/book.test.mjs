@@ -47,7 +47,7 @@ test("rejects duplicate IDs, empty content, and obsolete data properties", () =>
 });
 
 test("accepts optional topic tags without changing legacy pages or their text", () => {
-  const tagged = { ...page, tags: ["آداب الحديث", "العلاقات الاجتماعية"] };
+  const tagged = { ...page, tags: ["أدب الكلام", "العلاقات"] };
   const prepared = prepareBook({ ...book, pages: [tagged] });
   assert.deepEqual(prepared.pages[0].tags, tagged.tags);
   assert.equal(prepared.pages[0].markdown, page.markdown);
