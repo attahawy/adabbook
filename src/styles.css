@@ -48,8 +48,7 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 button,
-input,
-select {
+input {
   font: inherit;
 }
 button,
@@ -74,8 +73,7 @@ button {
 }
 button:focus-visible,
 a:focus-visible,
-input:focus-visible,
-select:focus-visible {
+input:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 4px;
 }
@@ -226,31 +224,12 @@ button svg {
   padding: 0 4px;
   font-size: 11px;
 }
-.topic-filter {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  color: var(--muted);
-  font-size: 11px;
-}
-.topic-filter select {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-  height: 40px;
-  padding: 0 8px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--paper);
-  color: var(--ink);
-  font-size: 12px;
-}
 .contents-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
   margin-top: 19px;
-  gap: 19px;
+  gap: 8px;
 }
 .contents-tabs button {
   font-size: 11px;
@@ -258,8 +237,10 @@ button svg {
   color: var(--muted);
   position: relative;
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .contents-tabs .selected {
   color: var(--green);
@@ -282,6 +263,64 @@ button svg {
   flex: 1;
   scrollbar-width: thin;
   scrollbar-color: #bcc6b6 transparent;
+}
+.contents-list:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: -3px;
+}
+.topic-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 11px;
+  border-radius: 3px;
+  text-align: start;
+  font-size: 12px;
+}
+.topic-link:hover {
+  background: var(--active);
+}
+.topic-name {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.8;
+}
+.topic-count {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.topic-pages-heading {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.topics-back {
+  display: block;
+  padding: 12px 0;
+  color: var(--green);
+  font-size: 11px;
+}
+.topics-back:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.topic-pages-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.topic-pages-title h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+.topic-pages-title > span {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 10px;
 }
 .chapter-link {
   width: 100%;

@@ -24,6 +24,11 @@ const numberFormatter = new Intl.NumberFormat("ar-EG", {
 });
 const number = (value) => numberFormatter.format(value);
 const dataUrl = (path) => `${import.meta.env.BASE_URL}data/${path}`;
+const contentsTabs = [
+  ["all", "جميع الصفحات"],
+  ["topics", "الموضوعات"],
+  ["saved", "المحفوظة"],
+];
 function HighlightedText({ text, terms }) {
   const ranges = findMatchRanges(text, terms);
   if (!ranges.length) return text;
@@ -287,12 +292,35 @@ function Reader({ book }) {
   const articleRef = useRef(null);
   const sidebarRef = useRef(null);
   const menuButtonRef = useRef(null);
+  const topicsBackRef = useRef(null);
   const startAtTopRef = useRef(false);
   const page = pagesById.get(pageId);
   const readingTitle = page.readingTitle;
   const index = orderedPages.findIndex((item) => item.pageid === pageId);
   const isBookmarked = bookmarks.includes(pageId);
   const isFinished = finished.includes(pageId);
+
+  const selectContentsTab = (next) => {
+    if (next !== filter && (next === "topics" || filter === "topics"))
+      setQuery("");
+    setFilter(next);
+  };
+  const openTopic = (tag) => {
+    setSelectedTag(tag);
+    setQuery("");
+    setFilter("topics");
+    setSidebarOpen(true);
+    requestAnimationFrame(() =>
+      topicsBackRef.current?.focus({ preventScroll: true }),
+    );
+  };
+  const showAllTopics = () => {
+    setSelectedTag("");
+    setQuery("");
+    requestAnimationFrame(() =>
+      sidebarRef.current?.querySelector(".topic-link")?.focus(),
+    );
+  };
 
   useEffect(() => {
     document.documentElement.dataset.theme =
@@ -379,8 +407,8 @@ function Reader({ book }) {
       }
       if (event.key === "Tab" && matchMedia("(max-width: 900px)").matches) {
         const controls = [
-          ...sidebarRef.current.querySelectorAll("button, input, select, a"),
-        ].filter((node) => !node.disabled);
+          ...sidebarRef.current.querySelectorAll("button, input, a, [tabindex]"),
+        ].filter((node) => !node.disabled && node.tabIndex >= 0);
         const first = controls[0],
           last = controls.at(-1);
         if (event.shiftKey && document.activeElement === first) {
@@ -484,10 +512,19 @@ function Reader({ book }) {
         : [...previous, pageId],
     );
   const terms = useMemo(() => searchTerms(query), [query]);
+  const showTopicIndex = filter === "topics" && !selectedTag;
+  const visibleTopics = useMemo(
+    () =>
+      topicTags.filter(([tag]) =>
+        terms.every((term) => normalize(tag).includes(term)),
+      ),
+    [topicTags, terms],
+  );
   const filteredPages = useMemo(
     () =>
       orderedPages.filter((item) => {
-        if (selectedTag && !item.tags.includes(selectedTag)) return false;
+        if (filter === "topics" && selectedTag && !item.tags.includes(selectedTag))
+          return false;
         if (filter === "saved" && !bookmarks.includes(item.pageid))
           return false;
         if (!terms.length) return true;
@@ -659,110 +696,169 @@ function Reader({ book }) {
             <Icon name="search" size={18} />
             <input
               type="search"
-              placeholder="ابحث في النصوص والوسوم…"
+              placeholder={
+                showTopicIndex ? "ابحث عن موضوع…" : "ابحث في النصوص والوسوم…"
+              }
               aria-label="ابحث في الكتاب"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
             <kbd>/</kbd>
           </label>
-          <label className="topic-filter">
-            <span>الموضوع</span>
-            <select
-              aria-label="تصفية حسب الموضوع"
-              value={selectedTag}
-              onChange={(event) => setSelectedTag(event.target.value)}
-            >
-              <option value="">كل الموضوعات</option>
-              {topicTags.map(([tag, count]) => (
-                <option key={tag} value={tag}>
-                  {tag} ({number(count)})
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="contents-tabs" role="group" aria-label="عرض الصفحات">
-            <button
-              className={filter === "all" ? "selected" : ""}
-              aria-pressed={filter === "all"}
-              onClick={() => setFilter("all")}
-            >
-              جميع الصفحات
-            </button>
-            <button
-              className={filter === "saved" ? "selected" : ""}
-              aria-pressed={filter === "saved"}
-              onClick={() => setFilter("saved")}
-            >
-              المحفوظة <span>{number(savedCount)}</span>
-            </button>
+          <div
+            className="contents-tabs"
+            role="tablist"
+            aria-label="عرض الصفحات"
+            onKeyDown={(event) => {
+              if (
+                event.defaultPrevented ||
+                event.altKey ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.shiftKey ||
+                !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              )
+                return;
+              const buttons = [
+                ...event.currentTarget.querySelectorAll('[role="tab"]'),
+              ];
+              const current = buttons.indexOf(
+                event.target.closest('[role="tab"]'),
+              );
+              if (current < 0) return;
+              event.preventDefault();
+              const step = event.key === "ArrowLeft" ? 1 : -1;
+              let next =
+                (current + step + contentsTabs.length) % contentsTabs.length;
+              if (event.key === "Home") next = 0;
+              else if (event.key === "End") next = contentsTabs.length - 1;
+              selectContentsTab(contentsTabs[next][0]);
+              buttons[next]?.focus();
+            }}
+          >
+            {contentsTabs.map(([key, label]) => (
+              <button
+                key={key}
+                id={`contents-tab-${key}`}
+                role="tab"
+                className={filter === key ? "selected" : ""}
+                aria-selected={filter === key}
+                aria-controls="book-contents-panel"
+                tabIndex={filter === key ? 0 : -1}
+                onClick={() => selectContentsTab(key)}
+              >
+                {label} {key === "saved" && <span>{number(savedCount)}</span>}
+              </button>
+            ))}
           </div>
-        </div>
-        <nav className="contents-list" aria-label="صفحات الكتاب">
-          {(hasQuery || selectedTag) && (
-            <p className="search-summary" role="status">
-              {`${number(filteredPages.length)} نتيجة${selectedTag ? ` في «${selectedTag}»` : " في العناوين والنصوص والوسوم"}`}
-            </p>
-          )}
-          {filteredPages.map((item) => (
-            <button
-              key={item.pageid}
-              className={`chapter-link ${item.pageid === pageId ? "active" : ""} ${hasQuery ? "search-result" : ""}`}
-              aria-current={item.pageid === pageId ? "page" : undefined}
-              onClick={() => navigate(item.pageid)}
-            >
-              <span className="chapter-number">
-                {number(orderedPages.indexOf(item) + 1).padStart(2, "0")}
-              </span>
-              <span className="chapter-copy">
-                <span className="chapter-name">
-                  <HighlightedText text={item.readingTitle} terms={terms} />
-                </span>
-                {item.tags.length > 0 && (
-                  <span className="chapter-topics">
-                    <HighlightedText text={item.tags.join(" · ")} terms={terms} />
-                  </span>
-                )}
-                {excerpts.get(item.pageid) && (
-                  <span className="search-excerpt">
-                    <HighlightedText
-                      text={excerpts.get(item.pageid)}
-                      terms={terms}
-                    />
-                  </span>
-                )}
-              </span>
-              {finished.includes(item.pageid) ? (
-                <Icon name="check" size={14} />
-              ) : bookmarks.includes(item.pageid) ? (
-                <Icon name="bookmark" size={14} />
-              ) : null}
-            </button>
-          ))}
-          {!filteredPages.length && (
-            <div className="list-empty">
-              <Icon
-                name={filter === "saved" ? "bookmark" : "search"}
-                size={26}
-              />
-              <p>
-                {hasQuery || selectedTag
-                  ? "لا توجد وصايا تطابق التصفية"
-                  : "احفظ صفحة لتعود إليها هنا"}
-              </p>
-              {(hasQuery || selectedTag) && (
-                <button
-                  onClick={() => {
-                    setQuery("");
-                    setSelectedTag("");
-                  }}
-                >
-                  مسح التصفية
-                </button>
-              )}
+          {filter === "topics" && selectedTag && (
+            <div className="topic-pages-heading">
+              <button
+                ref={topicsBackRef}
+                className="topics-back"
+                onClick={showAllTopics}
+              >
+                العودة إلى جميع الموضوعات
+              </button>
+              <div className="topic-pages-title">
+                <h3>{selectedTag}</h3>
+                <span role="status">{number(filteredPages.length)} صفحة</span>
+              </div>
             </div>
           )}
-        </nav>
+        </div>
+        <div
+          className="contents-list"
+          id="book-contents-panel"
+          role="tabpanel"
+          aria-labelledby={`contents-tab-${filter}`}
+          tabIndex={0}
+        >
+          {showTopicIndex ? (
+            <>
+              <p className="search-summary" role="status">
+                {number(visibleTopics.length)} موضوعًا
+              </p>
+              {visibleTopics.map(([tag, count]) => (
+                <button
+                  key={tag}
+                  className="topic-link"
+                  onClick={() => openTopic(tag)}
+                >
+                  <span className="topic-name">
+                    <HighlightedText text={tag} terms={terms} />
+                  </span>
+                  <span className="topic-count">{number(count)} صفحة</span>
+                </button>
+              ))}
+              {!visibleTopics.length && (
+                <div className="list-empty">
+                  <p>لا توجد موضوعات تطابق بحثك</p>
+                  <button onClick={() => setQuery("")}>مسح البحث</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {hasQuery && (
+                <p className="search-summary" role="status">
+                  {`${number(filteredPages.length)} نتيجة في العناوين والنصوص والوسوم`}
+                </p>
+              )}
+              {filteredPages.map((item) => (
+                <button
+                  key={item.pageid}
+                  className={`chapter-link ${item.pageid === pageId ? "active" : ""} ${hasQuery ? "search-result" : ""}`}
+                  aria-current={item.pageid === pageId ? "page" : undefined}
+                  onClick={() => navigate(item.pageid)}
+                >
+                  <span className="chapter-number">
+                    {number(orderedPages.indexOf(item) + 1).padStart(2, "0")}
+                  </span>
+                  <span className="chapter-copy">
+                    <span className="chapter-name">
+                      <HighlightedText text={item.readingTitle} terms={terms} />
+                    </span>
+                    {item.tags.length > 0 && (
+                      <span className="chapter-topics">
+                        <HighlightedText text={item.tags.join(" · ")} terms={terms} />
+                      </span>
+                    )}
+                    {excerpts.get(item.pageid) && (
+                      <span className="search-excerpt">
+                        <HighlightedText
+                          text={excerpts.get(item.pageid)}
+                          terms={terms}
+                        />
+                      </span>
+                    )}
+                  </span>
+                  {finished.includes(item.pageid) ? (
+                    <Icon name="check" size={14} />
+                  ) : bookmarks.includes(item.pageid) ? (
+                    <Icon name="bookmark" size={14} />
+                  ) : null}
+                </button>
+              ))}
+              {!filteredPages.length && (
+                <div className="list-empty">
+                  <Icon
+                    name={filter === "saved" ? "bookmark" : "search"}
+                    size={26}
+                  />
+                  <p>
+                    {hasQuery
+                      ? "لا توجد وصايا تطابق التصفية"
+                      : "احفظ صفحة لتعود إليها هنا"}
+                  </p>
+                  {hasQuery && (
+                    <button onClick={() => setQuery("")}>مسح البحث</button>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
         <div className="reading-status">
           <div>
             <span>رحلتك في الكتاب</span>
@@ -831,13 +927,8 @@ function Reader({ book }) {
                 <button
                   key={tag}
                   aria-label={`عرض وصايا عن ${tag}`}
-                  aria-pressed={selectedTag === tag}
-                  onClick={() => {
-                    setSelectedTag(tag);
-                    setQuery("");
-                    setFilter("all");
-                    setSidebarOpen(true);
-                  }}
+                  aria-pressed={filter === "topics" && selectedTag === tag}
+                  onClick={() => openTopic(tag)}
                 >
                   {tag}
                 </button>
