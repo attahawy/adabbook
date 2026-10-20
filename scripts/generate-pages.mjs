@@ -19,7 +19,10 @@ const xmlEscape = (value) =>
 
 export async function generatePages({
   root = projectRoot,
-  output = join(root, "dist"),
+  output = join(
+    root,
+    process.env.GITHUB_PAGES === "true" ? "dist-pages" : "dist",
+  ),
   basePath = process.env.GITHUB_PAGES === "true" ? "/adabbook/" : "/",
 } = {}) {
   const started = performance.now();

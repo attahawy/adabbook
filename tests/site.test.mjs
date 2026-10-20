@@ -133,7 +133,7 @@ test("generation follows edits and removals from the source, with complete prefi
     join(root, "dist/index.html"),
     '<!doctype html><html lang="ar" dir="rtl"><head><title>الكتاب</title><meta name="description" content="الكتاب"></head><body><div id="root"></div><script type="module" src="/adabbook/assets/app.js"></script></body></html>',
   );
-  const options = { root, basePath: "/adabbook/" };
+  const options = { root, output: join(root, "dist"), basePath: "/adabbook/" };
   await generatePages(options);
   await verifySite(options);
   const first = load(

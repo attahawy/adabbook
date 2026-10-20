@@ -15,7 +15,10 @@ import { renderPageMarkdown } from "../src/lib/markdown.js";
 
 export async function verifySite({
   root = fileURLToPath(new URL("../", import.meta.url)),
-  output = join(root, "dist"),
+  output = join(
+    root,
+    process.env.GITHUB_PAGES === "true" ? "dist-pages" : "dist",
+  ),
   basePath = process.env.GITHUB_PAGES === "true" ? "/adabbook/" : "/",
 } = {}) {
   const raw = await readFile(join(root, "data/book.json"), "utf8");
