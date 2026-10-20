@@ -47,6 +47,7 @@ test("edits, reordered pages, deletions and restored known IDs do not notify", (
   const data = book(42, 2);
   data.pages[0].revisionId = 99;
   data.pages[0].markdown = "# عنوان معدل\n\nنص معدل";
+  data.pages[0].tags = ["آداب الحديث"];
   assert.equal(planNotification(data, history(2, 42, 77)), null);
   assert.equal(planNotification(book(2, 42, 77), history(2, 42, 77)), null);
 });

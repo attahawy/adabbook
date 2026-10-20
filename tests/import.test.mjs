@@ -81,6 +81,7 @@ test("imports atomically, skips blank and excluded pages, and preserves cached l
     "فارغة بعنوان\nعنوان فقط\n",
   );
   saved.pages[0].markdown = "## تعديل محلي\n\nنص محرر";
+  saved.pages[0].tags = ["العلم والتعلم", "الأخلاق"];
   await writeFile(target, JSON.stringify(saved));
 
   await importPages(options);
@@ -91,6 +92,7 @@ test("imports atomically, skips blank and excluded pages, and preserves cached l
   );
   const updated = JSON.parse(await readFile(target, "utf8"));
   assert.equal(updated.pages[0].markdown, saved.pages[0].markdown);
+  assert.deepEqual(updated.pages[0].tags, saved.pages[0].tags);
   assert.deepEqual(updated.pages.map((page) => page.pageid), [10, 11]);
 
   fail = true;
@@ -111,6 +113,7 @@ test("imports atomically, skips blank and excluded pages, and preserves cached l
   assert.deepEqual(refreshed.pages.map((page) => page.pageid), [10, 11]);
   assert.match(refreshed.pages[0].markdown, /المحتوى الأصلي/);
   assert.doesNotMatch(refreshed.pages[0].markdown, /تعديل محلي/);
+  assert.deepEqual(refreshed.pages[0].tags, saved.pages[0].tags);
   await assert.rejects(
     readFile(join(directory, ".cache/import-pages/errors.json")),
     { code: "ENOENT" },

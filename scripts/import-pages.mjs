@@ -177,6 +177,8 @@ export async function importPages({
           saved.title === toLatinDigits(entry.title)
             ? saved
             : converted.page;
+        // Topic tags are locally curated, including when upstream text is refreshed.
+        if (saved?.tags) pages[index] = { ...pages[index], tags: saved.tags };
         nextIds.set(
           entry.pageid,
           idsByTitle.get(titleKey(converted.nextTitle ?? "")),

@@ -46,6 +46,22 @@ test("rejects duplicate IDs, empty content, and obsolete data properties", () =>
   );
 });
 
+test("accepts optional topic tags without changing legacy pages or their text", () => {
+  const tagged = { ...page, tags: ["آداب الحديث", "العلاقات الاجتماعية"] };
+  const prepared = prepareBook({ ...book, pages: [tagged] });
+  assert.deepEqual(prepared.pages[0].tags, tagged.tags);
+  assert.equal(prepared.pages[0].markdown, page.markdown);
+  assert.equal(prepared.pages[0].wordCount, prepareBook(book).pages[0].wordCount);
+  assert.deepEqual(prepareBook(book).pages[0].tags, []);
+});
+
+test("rejects malformed, blank, padded, and repeated topic tags", () => {
+  for (const tags of [
+    null, "الصحة", [1], [""], ["  "], [" الصحة"], ["الصحة", "الصحة"],
+  ])
+    assert.throws(() => validateBook({ ...book, pages: [{ ...page, tags }] }));
+});
+
 test("renders GFM tables, task lists, strikethrough, and bare URL links", () => {
   const doc = load(
     renderMarkdown(

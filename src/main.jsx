@@ -257,12 +257,24 @@ function Reader({ book }) {
   const [fontSize, setFontSize] = useStored("font-size", 25);
   const [theme, setTheme] = useStored("theme", "paper");
   const [query, setQuery] = useState("");
+  const [selectedTag, setSelectedTag] = useState("");
+  const topicTags = useMemo(() => {
+    const counts = new Map();
+    for (const page of orderedPages)
+      for (const tag of page.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    return [...counts].sort(([a], [b]) => a.localeCompare(b, "ar"));
+  }, [orderedPages]);
   const searchIndex = useMemo(
     () =>
       new Map(
         orderedPages.map((page) => [
           page.pageid,
-          { text: page.text, normalized: normalize(page.text) },
+          {
+            text: page.text,
+            normalized: normalize(
+              [page.title, page.readingTitle, page.text, ...page.tags].join(" "),
+            ),
+          },
         ]),
       ),
     [orderedPages],
@@ -367,7 +379,7 @@ function Reader({ book }) {
       }
       if (event.key === "Tab" && matchMedia("(max-width: 900px)").matches) {
         const controls = [
-          ...sidebarRef.current.querySelectorAll("button, input, a"),
+          ...sidebarRef.current.querySelectorAll("button, input, select, a"),
         ].filter((node) => !node.disabled);
         const first = controls[0],
           last = controls.at(-1);
@@ -475,14 +487,18 @@ function Reader({ book }) {
   const filteredPages = useMemo(
     () =>
       orderedPages.filter((item) => {
+        if (selectedTag && !item.tags.includes(selectedTag)) return false;
         if (filter === "saved" && !bookmarks.includes(item.pageid))
           return false;
         if (!terms.length) return true;
-        const haystack = `${normalize(`${item.readingTitle} ${item.title}`)} ${searchIndex.get(item.pageid).normalized}`;
+        const haystack = searchIndex.get(item.pageid).normalized;
         return terms.every((term) => haystack.includes(term));
       }),
-    [searchIndex, orderedPages, filter, bookmarks, terms],
+    [searchIndex, orderedPages, selectedTag, filter, bookmarks, terms],
   );
+  useEffect(() => {
+    sidebarRef.current?.querySelector(".contents-list")?.scrollTo(0, 0);
+  }, [query, selectedTag, filter]);
   const excerpts = useMemo(() => {
     if (!hasQuery) return new Map();
     return new Map(
@@ -643,12 +659,27 @@ function Reader({ book }) {
             <Icon name="search" size={18} />
             <input
               type="search"
-              placeholder="ابحث في الكتاب…"
+              placeholder="ابحث في النصوص والوسوم…"
               aria-label="ابحث في الكتاب"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
             <kbd>/</kbd>
+          </label>
+          <label className="topic-filter">
+            <span>الموضوع</span>
+            <select
+              aria-label="تصفية حسب الموضوع"
+              value={selectedTag}
+              onChange={(event) => setSelectedTag(event.target.value)}
+            >
+              <option value="">كل الموضوعات</option>
+              {topicTags.map(([tag, count]) => (
+                <option key={tag} value={tag}>
+                  {tag} ({number(count)})
+                </option>
+              ))}
+            </select>
           </label>
           <div className="contents-tabs" role="group" aria-label="عرض الصفحات">
             <button
@@ -668,9 +699,9 @@ function Reader({ book }) {
           </div>
         </div>
         <nav className="contents-list" aria-label="صفحات الكتاب">
-          {hasQuery && (
+          {(hasQuery || selectedTag) && (
             <p className="search-summary" role="status">
-              {`${number(filteredPages.length)} نتيجة في العناوين والنصوص`}
+              {`${number(filteredPages.length)} نتيجة${selectedTag ? ` في «${selectedTag}»` : " في العناوين والنصوص والوسوم"}`}
             </p>
           )}
           {filteredPages.map((item) => (
@@ -687,6 +718,11 @@ function Reader({ book }) {
                 <span className="chapter-name">
                   <HighlightedText text={item.readingTitle} terms={terms} />
                 </span>
+                {item.tags.length > 0 && (
+                  <span className="chapter-topics">
+                    <HighlightedText text={item.tags.join(" · ")} terms={terms} />
+                  </span>
+                )}
                 {excerpts.get(item.pageid) && (
                   <span className="search-excerpt">
                     <HighlightedText
@@ -710,12 +746,19 @@ function Reader({ book }) {
                 size={26}
               />
               <p>
-                {hasQuery
-                  ? "لا توجد صفحات تطابق بحثك"
+                {hasQuery || selectedTag
+                  ? "لا توجد وصايا تطابق التصفية"
                   : "احفظ صفحة لتعود إليها هنا"}
               </p>
-              {hasQuery && (
-                <button onClick={() => setQuery("")}>مسح البحث</button>
+              {(hasQuery || selectedTag) && (
+                <button
+                  onClick={() => {
+                    setQuery("");
+                    setSelectedTag("");
+                  }}
+                >
+                  مسح التصفية
+                </button>
               )}
             </div>
           )}
@@ -750,6 +793,29 @@ function Reader({ book }) {
               <span className="meta-dot">·</span>
               <span>{number(page.wordCount)} كلمة</span>
             </div>
+            {page.tags.length > 0 && (
+              <div
+                className="chapter-tags"
+                role="group"
+                aria-label="موضوعات الوصية"
+              >
+                {page.tags.map((tag) => (
+                  <button
+                    key={tag}
+                    aria-label={`عرض وصايا عن ${tag}`}
+                    aria-pressed={selectedTag === tag}
+                    onClick={() => {
+                      setSelectedTag(tag);
+                      setQuery("");
+                      setFilter("all");
+                      setSidebarOpen(true);
+                    }}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="title-ornament">
             <span />
