@@ -254,14 +254,17 @@
     294,
     262,
     60,
-    72
+    72,
+    629
   ],
-  "pending": {
+  "pending": null,
+  "lastDelivery": {
     "eventId": "d958ed95aa1b3f4905c433ef37b057d872f4ee260f43ce1aabac74998b132379",
     "pageIds": [
       629
     ],
-    "attemptedAt": "2026-10-20T04:46:53.509Z"
-  },
-  "lastDelivery": null
+    "attemptedAt": "2026-10-20T04:46:53.509Z",
+    "messageName": "projects/adabbook-rajol/messages/-5051497549901781541",
+    "acceptedAt": "2026-10-20T04:46:54.788Z"
+  }
 }
