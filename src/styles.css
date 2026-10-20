@@ -77,7 +77,8 @@ input:focus-visible {
   outline: 2px solid var(--green);
   outline-offset: 4px;
 }
-button svg {
+button svg,
+.page-navigation svg {
   flex-shrink: 0;
 }
 .skip-link {
@@ -323,6 +324,7 @@ button svg {
   font-size: 10px;
 }
 .chapter-link {
+  text-decoration: none;
   width: 100%;
   display: flex;
   text-align: start;
@@ -731,16 +733,39 @@ button svg {
   justify-content: space-between;
   gap: 20px;
 }
-.page-navigation button {
+.page-navigation a {
   display: flex;
   align-items: center;
   gap: 15px;
   max-width: 48%;
   padding: 7px 0;
   text-align: start;
+  text-decoration: none;
 }
-.page-navigation button:hover {
+.page-navigation a:hover {
   color: var(--green);
+}
+.page-navigation a[aria-disabled="true"] {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.reader-notice {
+  position: fixed;
+  inset-inline: 16px;
+  bottom: 16px;
+  z-index: 80;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 12px;
+  text-align: center;
+}
+.reader-notice button {
+  color: var(--green);
+  text-decoration: underline;
 }
 .page-navigation small {
   display: block;
@@ -1001,7 +1026,7 @@ button svg {
     margin-top: 31px;
     padding-block: 19px;
   }
-  .page-navigation button {
+  .page-navigation a {
     gap: 10px;
   }
   .page-navigation strong {

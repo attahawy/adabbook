@@ -1,6 +1,8 @@
 import MarkdownIt from "markdown-it";
 import footnote from "markdown-it-footnote";
 import taskLists from "markdown-it-task-lists";
+import { normalize } from "./search.js";
+import { pagePath } from "./site.js";
 
 const markdown = new MarkdownIt({ html: false, linkify: true })
   .use(footnote)
@@ -68,6 +70,59 @@ for (const [rule, prefix] of [
 }
 
 export const renderMarkdown = (content) => markdown.render(content);
+
+// Render the same portable, escaped Markdown on Node and in the browser.
+// Raw HTML is disabled above; markdown-it also rejects executable link schemes.
+export function renderPageMarkdown(page, pages, basePath = "/") {
+  const tokens = markdown.parse(page.markdown, {});
+  const ids = new Set(pages.map((item) => item.pageid));
+  const titles = new Map(
+    pages.map((item) => [normalize(item.title), item.pageid]),
+  );
+  const source = new URL(page.sourceUrl);
+  const visit = (items) => {
+    for (const token of items) {
+      if (token.type === "link_open") {
+        const href = token.attrGet("href");
+        if (!href.startsWith("#")) {
+          const url = new URL(href, source);
+          const title = url.searchParams.get("title");
+          const id = href.startsWith("?page=")
+            ? Number(url.searchParams.get("page"))
+            : url.origin === source.origin &&
+                url.pathname === source.pathname &&
+                title
+              ? titles.get(normalize(title))
+              : undefined;
+          if (ids.has(id)) {
+            token.attrSet("href", `${pagePath(id, basePath)}${url.hash}`);
+            token.attrSet("data-page-id", String(id));
+          } else {
+            token.attrSet("href", url.href);
+            token.attrSet("target", "_blank");
+            token.attrSet("rel", "noopener noreferrer");
+          }
+        }
+      } else if (token.type === "image") {
+        token.attrSet("src", new URL(token.attrGet("src"), source).href);
+        token.attrSet("loading", "lazy");
+      }
+      if (token.children) visit(token.children);
+    }
+  };
+  visit(tokens);
+  const first = tokens.findIndex((token) => token.type === "heading_open");
+  if (first !== -1) {
+    const heading = tokens[first];
+    const anchor = new heading.constructor("html_block", "", 0);
+    const ids = new Set([heading.attrGet("id"), heading.meta.legacyAnchor]);
+    anchor.content = [...ids]
+      .map((id) => `<span id="${markdown.utils.escapeHtml(id)}"></span>`)
+      .join("");
+    tokens.splice(first, 3, anchor);
+  }
+  return markdown.renderer.render(tokens, markdown.options, {});
+}
 
 export function markdownDetails(content, fallbackTitle = "") {
   const tokens = markdown.parse(content, {});

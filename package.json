@@ -10,7 +10,7 @@
     "verify:data": "node scripts/verify-data.mjs",
     "notifications:preview": "node scripts/notify-new-pages.mjs --dry-run",
     "test": "node --test tests/*.test.mjs",
-    "build": "npm run verify:data && vite build",
+    "build": "npm run verify:data && vite build && node scripts/generate-pages.mjs && node scripts/verify-site.mjs",
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
