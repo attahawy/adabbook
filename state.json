@@ -7,5 +7,10 @@
     "status": "sent",
     "messageName": "projects/adabbook-rajol/messages/4374110085181092934"
   },
-  "friday": null
+  "friday": {
+    "date": "2026-10-23",
+    "eventId": "944f956ff0408109638a02121c83f30c59f660d30a514240698257085433ef19",
+    "pageId": 3,
+    "status": "pending"
+  }
 }
