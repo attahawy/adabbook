@@ -4,7 +4,8 @@
     "date": "2026-10-23",
     "eventId": "e28bc13cc0f5b81dddbbd119bd0a5c25428b645d215517bcafae452d91fb3856",
     "pageId": 4,
-    "status": "pending"
+    "status": "sent",
+    "messageName": "projects/adabbook-rajol/messages/4374110085181092934"
   },
   "friday": null
 }
