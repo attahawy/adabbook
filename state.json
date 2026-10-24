@@ -257,7 +257,13 @@
     72,
     629
   ],
-  "pending": null,
+  "pending": {
+    "eventId": "a46556eacdaeab5a1b4f023d77645e96c34f56112ef175b302a8fccb7d819db8",
+    "pageIds": [
+      630
+    ],
+    "attemptedAt": "2026-10-24T04:28:55.635Z"
+  },
   "lastDelivery": {
     "eventId": "d958ed95aa1b3f4905c433ef37b057d872f4ee260f43ce1aabac74998b132379",
     "pageIds": [
