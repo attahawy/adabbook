@@ -10,7 +10,7 @@ const githubPages = process.env.GITHUB_PAGES === "true";
 const outputDirectory = githubPages ? "dist-pages" : "dist";
 
 export default defineConfig({
-  base: githubPages ? "/adabbook/" : "/",
+  base: "/",
   build: { outDir: outputDirectory },
   plugins: [
     react(),

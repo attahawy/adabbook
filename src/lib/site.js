@@ -1,4 +1,4 @@
-export const siteUrl = "https://attahawy.github.io/adabbook/";
+export const siteUrl = "https://adab.rajol.com/";
 export const siteName = "أدب الرجل";
 export const authorName = "سامي الطحاوي";
 

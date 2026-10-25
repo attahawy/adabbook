@@ -23,7 +23,7 @@ export async function generatePages({
     root,
     process.env.GITHUB_PAGES === "true" ? "dist-pages" : "dist",
   ),
-  basePath = process.env.GITHUB_PAGES === "true" ? "/adabbook/" : "/",
+  basePath = "/",
 } = {}) {
   const started = performance.now();
   const raw = await readFile(join(root, "data/book.json"), "utf8");

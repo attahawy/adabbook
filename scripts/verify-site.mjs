@@ -19,7 +19,7 @@ export async function verifySite({
     root,
     process.env.GITHUB_PAGES === "true" ? "dist-pages" : "dist",
   ),
-  basePath = process.env.GITHUB_PAGES === "true" ? "/adabbook/" : "/",
+  basePath = "/",
 } = {}) {
   const raw = await readFile(join(root, "data/book.json"), "utf8");
   const book = prepareBook(JSON.parse(raw));

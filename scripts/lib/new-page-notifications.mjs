@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { validateBook } from "../../src/lib/book.js";
 import { markdownDetails } from "../../src/lib/markdown.js";
+import { siteUrl } from "../../src/lib/site.js";
 
 export const notificationTopic = "adabbook_new_pages";
 export const bookDigest = (book) =>
@@ -128,7 +129,7 @@ export async function notifyNewPages({
 }
 
 export async function verifyPublishedBook(book, {
-  url = "https://attahawy.github.io/adabbook/data/book.json",
+  url = new URL("data/book.json", siteUrl).href,
   fetchImpl = fetch,
   attempts = 6,
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
