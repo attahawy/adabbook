@@ -266,23 +266,17 @@
     637,
     638,
     639,
-    640
+    640,
+    641
   ],
-  "pending": {
+  "pending": null,
+  "lastDelivery": {
     "eventId": "a4a99cedd68f0dd2b6693f76c1fcd94010079aa62357769a8e38a4c65762ec1c",
     "pageIds": [
       641
     ],
-    "attemptedAt": "2026-11-05T04:49:18.490Z"
-  },
-  "lastDelivery": {
-    "eventId": "56f77e944579bfd12dcb3dcbf574425fc7c5b22955bf73c5f1918de63ff374f0",
-    "pageIds": [
-      639,
-      640
-    ],
-    "attemptedAt": "2026-11-04T09:36:24.870Z",
-    "messageName": "projects/adabbook-rajol/messages/2147234056695915191",
-    "acceptedAt": "2026-11-04T09:36:27.093Z"
+    "attemptedAt": "2026-11-05T04:49:18.490Z",
+    "messageName": "projects/adabbook-rajol/messages/-1449740971655223819",
+    "acceptedAt": "2026-11-05T04:49:19.895Z"
   }
 }
