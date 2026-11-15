@@ -268,23 +268,19 @@
     639,
     640,
     641,
-    642
+    642,
+    643,
+    644
   ],
-  "pending": {
+  "pending": null,
+  "lastDelivery": {
     "eventId": "9a8bdcd9833f8cfcc6baff2d30afc0fd269d3994a70148ea62e88d9647befc3f",
     "pageIds": [
       643,
       644
     ],
-    "attemptedAt": "2026-11-15T00:43:45.944Z"
-  },
-  "lastDelivery": {
-    "eventId": "d20cab24fa23a7c3f5604e580c0482223bb29abca3f6792af6894884c1f4de48",
-    "pageIds": [
-      642
-    ],
-    "attemptedAt": "2026-11-11T06:34:35.533Z",
-    "messageName": "projects/adabbook-rajol/messages/-5981833604486149125",
-    "acceptedAt": "2026-11-11T06:34:36.799Z"
+    "attemptedAt": "2026-11-15T00:43:45.944Z",
+    "messageName": "projects/adabbook-rajol/messages/7675636130406487785",
+    "acceptedAt": "2026-11-15T00:43:47.585Z"
   }
 }
