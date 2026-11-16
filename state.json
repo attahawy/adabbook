@@ -1,11 +1,10 @@
 {
   "schemaVersion": 1,
   "daily": {
-    "date": "2026-11-15",
-    "eventId": "22366bb93531b4a555cfc45866526658ded99af5d37308780b72ad8ff2a01668",
-    "pageId": 278,
-    "status": "sent",
-    "messageName": "projects/adabbook-rajol/messages/3913000813765921219"
+    "date": "2026-11-16",
+    "eventId": "b0854c16498e1ed1eaee94bd2de04d042dd7699fe4afce101d7e9d6b4c46dd81",
+    "pageId": 280,
+    "status": "pending"
   },
   "friday": {
     "date": "2026-11-13",
