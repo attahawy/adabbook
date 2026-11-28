@@ -272,9 +272,14 @@
     643,
     644,
     645,
-    646
+    646,
+    647,
+    648,
+    649,
+    650
   ],
-  "pending": {
+  "pending": null,
+  "lastDelivery": {
     "eventId": "837e5f640494e93b4d653165c9feb6d861ec686a21a6139638ac46fc55355dc6",
     "pageIds": [
       647,
@@ -282,15 +287,8 @@
       649,
       650
     ],
-    "attemptedAt": "2026-11-28T05:41:13.512Z"
-  },
-  "lastDelivery": {
-    "eventId": "012fa299feb4d016126ca66656522f7070bc8308a02b6928cf82abcdb92683a5",
-    "pageIds": [
-      646
-    ],
-    "attemptedAt": "2026-11-24T05:34:57.277Z",
-    "messageName": "projects/adabbook-rajol/messages/-2665071266810996771",
-    "acceptedAt": "2026-11-24T05:34:58.659Z"
+    "attemptedAt": "2026-11-28T05:41:13.512Z",
+    "messageName": "projects/adabbook-rajol/messages/121522346721061609",
+    "acceptedAt": "2026-11-28T05:41:14.570Z"
   }
 }
